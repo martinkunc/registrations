@@ -1,5 +1,6 @@
 const {app, BrowserWindow, Menu, ipcMain} = require('electron');
-const xlsx = require('xlsx');
+const xlsxpopulate = require('xlsx-populate');
+const path = require('path');
 const fs = require('fs');
 
 let mainWindow;
@@ -20,7 +21,7 @@ app.on('ready', () => {
 
   mainWindow.on('closed', () => app.quit());
 
-  renderScreen('welcome')
+  
 
   mainWindow.webContents.on('did-finish-load', function() {
     console.log('did-finish-load')
@@ -38,62 +39,142 @@ ipcMain.on('screen:set', (event, screen) => {
   renderScreen(screen)
 });
 
-const persFile = 'data/persons.xlsx'
+const persFile = path.join(__dirname, 'data/persons.xlsx')
 const perSheet = 'persons'
-ipcMain.on('person:register', (event, person) => {
-  console.log(' registrovany ' + person)
+const regSheet = 'registered'
+const regName = 'Registered name'
+const persName = 'Persons'
+ipcMain.on('person:register', async (event, person) => {
+  console.log(' registered ' + person)
   var wb;
   if (!fs.existsSync(persFile)) {
-    wb = xlsx.utils.book_new()
+     wb = await xlsxpopulate.fromBlankAsync(persFile);
+     olds = wb.sheets(0)
+     ws = wb.addSheet(perSheet)
+     wb.deleteSheet(0)
+     ws.row(1).col(1).value(regName)
   } else {
-    wb = xlsx.readFile(persFile)
+    wb = await xlsxpopulate.fromFileAsync(persFile)
+    ws = wb.sheet(perSheet)
   }
   
-  console.log(wb.SheetNames)
-  console.log(typeof(wb.Sheets[perSheet]))
-  console.log(typeof(wb.Sheets[perSheet]) == 'undefined') 
-
-  if (typeof(wb.Sheets[perSheet]) == 'undefined') {
-    var ws_data = [ [ '' ] ];
-    var ws = xlsx.utils.aoa_to_sheet(ws_data);
-    console.log('wsin '+ws)
-    xlsx.utils.book_append_sheet(wb, ws,perSheet)
-  }
-  ws = wb.Sheets[perSheet]
-  console.log('ws'+ws)
-  //rows = ws['!rows'] 
-  //lr = ws['!rows'] ? rows.length : 0
-  lr = 0
-  nr = lr
-  for (var r=0; r<lr; r++) {
-    cell_address = {c:0, r:r}
-    cell_ref = XLSX.utils.encode_cell(cell_address);
-    var desired_value = (desired_cell ? desired_cell.v : undefined);
-    if (desired_value == undefined) {
-      nr = r;
-      break;
-    } 
-  }
-
-  cell_address = {c:1, r:nr+1}
-  console.log(cell_address)
+  lastr = ws.usedRange().endCell().rowNumber()
+  ws.row(lastr + 1).cell(1).value(person)
   
-  cell_ref = xlsx.utils.encode_cell(cell_address);
-  ws['A1'] = { v:'a1 data' }
-  ws['B2'] = { v:'b2 value' }
-  xlsx.w
+  await wb.toFileAsync(persFile)
+  renderScreen('welcome')
+});
 
-  // var ws2 = xlsx.utils.aoa_to_sheet([
-  //   "SheetJS".split(""),
-  //   [1,2,3,4,5,6,7],
-  //   [2,3,4,5,6,7,8]
-  // ]);
-  // ws2['D1'] = { v:'d1' }
-  // xlsx.utils.book_append_sheet(wb, ws2,'ws2')
-  xlsx.writeFile(wb,  persFile);
+ipcMain.on('list:get', async (event, a) => {
+  console.log(' listget ' )
+  var wb;
+  if (!fs.existsSync(persFile)) {
+    mainWindow.webContents.send('list:obtained', []);
+    return
+  }
+  
+  wb = await xlsxpopulate.fromFileAsync(persFile)
+  ws = wb.sheet(regSheet)
+  if (typeof(ws) == "undefined") {
+    mainWindow.webContents.send('list:obtained', []);
+  }
+  list = await getListFromSheet(persFile, regSheet)
+  list = getListWithoutTitle(list, regName)
 
+  // lastr = ws.usedRange().endCell().rowNumber()
+  // list = []
+  // for (r=0; r < lastr + 1; r++) {
+  //   v = ws.row(r).cell(1).value()
+  //   if (r == 0 && r == regName) {
+  //     continue
+  //   }
+  //   list.push(v)
+  // }
+  
+  //event.sender.send("list:obtained", "aa");
+  mainWindow.webContents.send('list:obtained', list);
+  //console.log('sent')
+});
+
+ipcMain.on('persons:get', async (event, a) => {
+  console.log(' regget ' )
+  var wb;
+  if (!fs.existsSync(persFile)) {
+    if (a.t == "autocomplete") {
+      mainWindow.webContents.send('registered:getautocomplete', []);
+    } else {
+      mainWindow.webContents.send('registered:verified', {ok:false, msg:'Nemohu registrovat uzivatele. Soubor s registracemi nenalezen.'});
+    }
+    return
+  }
+  
+  list = await getListFromSheet(persFile, perSheet)
+  list = getListWithoutTitle(list, persName)
+  if (a.t == "autocomplete") {
+    mainWindow.webContents.send('registered:getautocomplete', list);
+    return
+  }
+
+  console.log('check if is in persons')
+  isInPers = isInList(a.p, list)
+  if (!isInPers) {
+    mainWindow.webContents.send('registered:verified', {ok:false, msg:'Nemohu registrovat uzivatele. Neni predregistrovany.'});
+    return
+  }
+
+  list = await getListFromSheet(persFile, regSheet)
+  list = getListWithoutTitle(list, regName)
+  isInRegs = isInList(a.p, list)
+  if (isInRegs) {
+    mainWindow.webContents.send('registered:verified', {ok:false, msg:'Nemohu registrovat uzivatele. Uzivatel je uz zaregistrovany.'});
+    return
+  }
+  
+  wb = await xlsxpopulate.fromFileAsync(persFile)
+  ws = wb.sheet(regSheet)
+  if (typeof(ws) == "undefined") {
+    ws = wb.addSheet(regSheet)
+    ws.row(1).cell(1).value(regName)
+  }
+  lastr = ws.usedRange().endCell().rowNumber()
+  ws.row(lastr + 1).cell(1).value(a.p)
+  await wb.toFileAsync(persFile)
+  mainWindow.webContents.send('registered:verified', {ok:true});
 
 });
+
+function isInList(s, l) {
+  for (r=0; r < l.length ; r++) {
+    //console.log(' list[r]' + list[r] + ' ' + s)
+    if (l[r] && s && l[r].toLowerCase() == s.toLowerCase()) {
+      return true
+    }
+  }
+  return false
+}
+
+async function getListFromSheet(b, s) {
+  wb = await xlsxpopulate.fromFileAsync(b)
+  ws = wb.sheet(s)
+  if (typeof(ws) == "undefined")
+  {
+    return []
+  }
+  lastr = ws.usedRange().endCell().rowNumber()
+  list = []
+  for (r=1; r < lastr + 1; r++) {
+    v = ws.row(r).cell(1).value()
+    list.push(v)
+  }
+  return list
+}
+
+function getListWithoutTitle(l, t) {
+  if (l[0] == t) {
+    l.splice(0, 1)
+  }
+  return l
+}
 
 function renderScreen(screen) {
   mainWindow.webContents.send('screen:set', screen);
@@ -104,16 +185,16 @@ const menuTemplate = [
   {
     label: 'File',
     submenu: [
-      {
-        label: 'New Todo',
-        click() { createAddWindow(); }
-      },
-      {
-        label: 'Clear Todos',
-        click() {
-          mainWindow.webContents.send('todo:clear');
-        }
-      },
+      // {
+      //   label: 'New Todo',
+      //   click() { createAddWindow(); }
+      // },
+      // {
+      //   label: 'Clear Todos',
+      //   click() {
+      //     mainWindow.webContents.send('todo:clear');
+      //   }
+      // },
       {
         label: 'Quit',
         accelerator: process.platform === 'darwin' ? 'Command+Q' : 'Ctrl+Q',

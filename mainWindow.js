@@ -1,11 +1,13 @@
 const electron = require('electron');
 const fs = require('fs');
+const path = require('path');
 const { ipcRenderer } = electron;
 
+let input;
 
 ipcRenderer.on('screen:set', (event, screen) => {
   console.log('inside set')
-  fs.readFile(screen+".html", 'utf8', function(err, fileData) {
+  fs.readFile(path.join(__dirname,screen+".html"), 'utf8', function(err, fileData) {
       console.log(fileData);
       insertAndExecute('container', screen,  fileData)
       //container = document.getElementById('container');
@@ -13,6 +15,8 @@ ipcRenderer.on('screen:set', (event, screen) => {
   });
 
 });
+
+
 
 ipcRenderer.on('todo:clear', () => {
   list.innerHTML = '';
@@ -41,7 +45,7 @@ function insertAndExecute(id, screen, text)
     script = document.createElement("script");
     script.type = "text/javascript";
     script.id = "content"
-    script.src = screen+".js"
+    script.src = path.join(__dirname, screen+".js")
     head.insertBefore( script, head.firstChild );
 
     //for(script in scripts)
