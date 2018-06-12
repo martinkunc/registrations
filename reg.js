@@ -1,20 +1,24 @@
 
 
 ipcRenderer.on('registered:getautocomplete', (event, list) => {
+  
   console.log('inside registered:getautocomplete')
   new Awesomplete(input, {
-    list: list
+    list: list, 
+    minChars: 0
   });
+  input.focus()
+  
 });
 
 ipcRenderer.on('registered:verified', (event, res) => {
   console.log('inside registered:verified')
   if (!res.ok) {
     alertify.alert(res.msg, function(){
-      alertify.message('OK');
+      console.log('successfully saved')
     });
 } else {
-  alertify.alert("Uspesne zaregistrovan.", function(){
+  alertify.alert("Uspech","Registrace proběhla úspěšně", function(){
       ipcRenderer.send('screen:set', 'welcome');
   });
 }
@@ -38,5 +42,24 @@ input = document.getElementById("name");
 // 	list: ["Ada", "Java", "JavaScript", "Brainfuck", "LOLCODE", "Node.js", "Ruby on Rails"]
 // });
 
-input.focus()
+var style = document.createElement('style');
+style.type = 'text/css';
+style.innerHTML = `
+div.awesomplete {
+  display: block;
+}
+`;
+document.getElementsByTagName('head')[0].appendChild(style);
+
+function onl() {
+var input = document.getElementById("name");
+console.log('before focus')
+  input.focus()
+  console.log(input)
+  console.log('after focus')
+}
+//document.body.onload = onl
+
+
+
 ipcRenderer.send('persons:get', {t: 'autocomplete'});
