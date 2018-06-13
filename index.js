@@ -136,17 +136,42 @@ ipcMain.on('persons:get', async (event, a) => {
   if (typeof (ws) == "undefined") {
     ws = wb.addSheet(regSheet)
   }
-  arr = await getArraysFromSheet(persFile, regSheet, true)
+  arr = await getArraysFromSheet(persFile, perSheet, true)
   irow = await getItemIndexFromArr(arr, 0, a.p)
   n = a.p
   if (irow < 0) {
     irow = await getItemIndexFromArr(arr, 1, a.p)
-    n = getValAtIndexFromArr(arr, irow, 0)
+    n = await getValAtIndexFromArr(arr, irow, 0)
+  }
+  arr = await getArraysFromSheet(persFile, regSheet, true)
+  arr2 = [regName]
+  for(i=1;i < arr.length; i++) {
+    if (typeof(arr[i][0]) != "undefined") {
+      arr2.push(arr[i][0])
+    }
   }
 
-  lastr = getEmptyOrNewVal(arr, 0)
-  ws.row(lastr).cell(1).value(a.p)
-  await wb.toFileAsync(persFile)
+  arr2.push(n)
+  arr = arr2
+  ws = wb.sheet(regSheet)
+  if (typeof (ws) != "undefined") {
+    ws = wb.deleteSheet(ws)
+  }
+  ws = wb.addSheet(regSheet)
+  for(i=0;i < arr.length; i++) {
+    ws.row(i+1).cell(1).value(arr[i])
+  }
+  wb.moveSheet(regSheet, setSheet)
+  
+  // lastr = await getEmptyOrNewVal(arr, 0)
+  // adr = ws.row(lastr + 1).cell(1).address()
+  // ws.cell(adr).value(n)
+  // for(i=1;i < 50; i++) {
+  //   ws.row(i).cell(i).value(i)
+  // }
+  //value(n)
+  r = await wb.toFileAsync(persFile)
+  
   mainWindow.webContents.send('registered:verified', { ok: true });
 
 });
