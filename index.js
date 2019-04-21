@@ -46,6 +46,7 @@ const regSheet = 'registered'
 const setSheet = 'settings'
 const settingsName = 'Settings'
 const regName = 'Registered name'
+const regNum = 'Registration number'
 const persName = 'Persons'
 ipcMain.on('person:register', async (event, person) => {
   console.log(' registered ' + person)
@@ -81,9 +82,19 @@ ipcMain.on('list:get', async (event, a) => {
   if (typeof (ws) == "undefined") {
     mainWindow.webContents.send('list:obtained', []);
   }
-  list = await getListFromSheet(persFile, regSheet)
-  list = getListWithoutTitle(list, regName)
-  list.sort(function (a, b) { return (a+"").toLowerCase() > (b+"").toLowerCase() });
+
+  arr = await getArraysFromSheet(persFile, regSheet, true)
+  arr.splice(0,1)
+  var list = []
+  for(i=1;i < arr.length; i++) {
+    if (typeof(arr[i][0]) != "undefined") {
+      list.push({ N: arr[i][0], R: arr[i][1]})
+    }
+  }
+
+  //list = await getListFromSheet(persFile, regSheet)
+  //list = getListWithoutTitle(list, regName)
+  list.sort(function (a, b) { return (a.N+"").toLowerCase() > (b.N+"").toLowerCase() });
 
 
   //event.sender.send("list:obtained", "aa");
@@ -107,51 +118,80 @@ ipcMain.on('persons:get', async (event, a) => {
   //list = getListWithoutTitle(list, persName)
 
   arr = await getArraysFromSheet(persFile, perSheet, true)
+  console.log('current arr '+JSON.stringify(arr))
+  // removes first row
   arr.splice(0,1)  //getArrayWithoutTitle(arr, settingsName)
+  //console.log('cut arr '+JSON.stringify(arr))
   p = await getColFromArr(arr, 0, false)
+  //console.log('p  '+JSON.stringify(p))
   r = await getColFromArr(arr, 1, false)
+  //console.log('r  '+JSON.stringify(r))
   list = p.concat(r)
+  //console.log('list  '+JSON.stringify(list))
   if (a.t == "autocomplete") {
     mainWindow.webContents.send('registered:getautocomplete', list);
     return
   }
 
-  console.log('check if is in persons')
-  isInPers = isInList(a.p, list)
-  if (!isInPers) {
-    mainWindow.webContents.send('registered:verified', { ok: false, msg: 'Nemohu registrovat uzivatele. Neni predregistrovany.' });
-    return
-  }
-
-  list = await getListFromSheet(persFile, regSheet)
-  list = getListWithoutTitle(list, regName)
-  isInRegs = isInList(a.p, list)
-  if (isInRegs) {
-    mainWindow.webContents.send('registered:verified', { ok: false, msg: 'Nemohu registrovat uzivatele. Uzivatel je uz zaregistrovany.' });
-    return
-  }
-  
+  // FInd person among registered
   wb = await xlsxpopulate.fromFileAsync(persFile)
   ws = wb.sheet(regSheet)
   if (typeof (ws) == "undefined") {
     ws = wb.addSheet(regSheet)
   }
   arr = await getArraysFromSheet(persFile, perSheet, true)
+  // Find person by name
   irow = await getItemIndexFromArr(arr, 0, a.p)
   n = a.p
+  if (irow >=0 ) {
+    rn = await getValAtIndexFromArr(arr, irow, 1)
+  }
+  console.log('irow '+irow)
   if (irow < 0) {
+    // Find person by reg num
     irow = await getItemIndexFromArr(arr, 1, a.p)
     n = await getValAtIndexFromArr(arr, irow, 0)
+    rn = a.p
   }
+
+  console.log('check if '+n+' with rn '+ rn +' is in persons')
+  //console.log('current list '+JSON.stringify(list))
+  isInPers = isInList(n, list)
+  if (!isInPers) {
+    mainWindow.webContents.send('registered:verified', { ok: false, msg: 'Nemohu registrovat uzivatele. Neni predregistrovany.' });
+    return
+  }
+
+  //list = await getListFromSheet(persFile, regSheet)
+  //list = getListWithoutTitle(list, regName)
+
   arr = await getArraysFromSheet(persFile, regSheet, true)
-  arr2 = [regName]
+  // removes first row
+  arr.splice(0,1)  //getArrayWithoutTitle(arr, settingsName)
+  personsList = await getColFromArr(arr, 0, false)
+  regNumsList = await getColFromArr(arr, 1, false)
+
+  isInRegs = isInList(n, personsList)
+  if (isInRegs) {
+    mainWindow.webContents.send('registered:verified', { ok: false, msg: 'Nemohu registrovat uzivatele. Uzivatel je uz zaregistrovany.' });
+    return
+  }
+  isInRegs = isInList(rn, regNumsList)
+  if (isInRegs) {
+    mainWindow.webContents.send('registered:verified', { ok: false, msg: 'Nemohu registrovat uzivatele. Uzivatel  s timto cislem je uz zaregistrovany.' });
+    return
+  }
+  
+
+  arr = await getArraysFromSheet(persFile, regSheet, true)
+  arr2 = [{N: regName, R: regNum}]
   for(i=1;i < arr.length; i++) {
     if (typeof(arr[i][0]) != "undefined") {
-      arr2.push(arr[i][0])
+      arr2.push({ N: arr[i][0], R: arr[i][1]})
     }
   }
 
-  arr2.push(n)
+  arr2.push({ N: n, R: rn})
   arr = arr2
   ws = wb.sheet(regSheet)
   if (typeof (ws) != "undefined") {
@@ -159,7 +199,8 @@ ipcMain.on('persons:get', async (event, a) => {
   }
   ws = wb.addSheet(regSheet)
   for(i=0;i < arr.length; i++) {
-    ws.row(i+1).cell(1).value(arr[i])
+    ws.row(i+1).cell(1).value(arr[i].N)
+    ws.row(i+1).cell(2).value(arr[i].R)
   }
   wb.moveSheet(regSheet, setSheet)
   
@@ -199,7 +240,7 @@ ipcMain.on('settings:get', async (event, a) => {
 function isInList(s, l) {
   for (r = 0; r < l.length; r++) {
     //console.log(' list[r]' + list[r] + ' ' + s)
-    if (l[r] && s && (l[r]+"").toLowerCase() == s.toLowerCase()) {
+    if (l[r] && s && (l[r]+"").toLowerCase() == (s+"").toLowerCase()) {
       return true
     }
   }
@@ -213,7 +254,7 @@ async function getListFromSheet(b, s) {
     return []
   }
   lastr = ws.usedRange().endCell().rowNumber()
-  list = []
+  var list = []
   for (r = 1; r <= lastr; r++) {
     v = ws.row(r).cell(1).value()
     if (typeof (v) != "undefined") {
@@ -252,18 +293,19 @@ async function getEmptyOrNewVal(arr, col) {
 }
 
 async function getArraysFromSheet(b, s, includeEmpty) {
-  wb = await xlsxpopulate.fromFileAsync(b)
-  ws = wb.sheet(s)
+  var wb = await xlsxpopulate.fromFileAsync(b)
+  var ws = wb.sheet(s)
   if (typeof (ws) == "undefined") {
     return []
   }
   lastr = ws.usedRange().endCell().rowNumber()
   lastc = ws.usedRange().endCell().columnNumber()
-  arrays = []
+  var arrays = []
   for (r = 1; r <= lastr; r++) {
-    list = []
+    var list = []
     for (c = 1; c <= lastc; c++) {
       v = ws.row(r).cell(c).value()
+      //console.log('value at r'+r+' col '+c+' v:'+v)
       if (typeof (v) == "undefined") {
         if (includeEmpty) {
           list.push(v)
@@ -278,7 +320,7 @@ async function getArraysFromSheet(b, s, includeEmpty) {
 }
 
 async function getColFromArr(arr, c, includeEmpty) {
-  list = []
+  var list = []
   for (r = 0; r <= arr.length; r++) {
     if (typeof (arr[r]) == "undefined") {
       if (includeEmpty) {
@@ -286,6 +328,7 @@ async function getColFromArr(arr, c, includeEmpty) {
       continue
     }
       v = arr[r][c]
+      //console.log('arr at r:'+r+' c: '+c+' v: '+v)
       if (typeof (v) == "undefined") {
         if (includeEmpty) {
           list.push(v)

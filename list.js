@@ -6,11 +6,19 @@
   });
 
 function format(list) {
-  s = ""
+  var s = "<table border=1>"
+  s+="<td>"+"Jmeno"+"</td><td>"+"Registracni cislo"+"</td>"
   for (r=0; r < list.length; r++) {
     if (!list[r]) continue
-    s = s + list[r] + "<br/>"
+    s += "<tr>"
+    var n = list[r].N
+    var rn = list[r].R
+    if (typeof(n) == "undefined") n = ""
+    if (typeof(rn) == "undefined") rn = ""
+    s +=  "<td>" + n + "</td><td>" + rn + "</td>"
+    s += "</tr>"
   }
+  s += "</table"
   return s
 }
 
