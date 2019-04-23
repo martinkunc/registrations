@@ -86,15 +86,28 @@ ipcMain.on('list:get', async (event, a) => {
   arr = await getArraysFromSheet(persFile, regSheet, true)
   arr.splice(0,1)
   var list = []
-  for(i=1;i < arr.length; i++) {
+  for(i=0;i < arr.length; i++) {
     if (typeof(arr[i][0]) != "undefined") {
       list.push({ N: arr[i][0], R: arr[i][1]})
     }
   }
-
+  //onsole.log('Registered are '+JSON.stringify(list))
   //list = await getListFromSheet(persFile, regSheet)
   //list = getListWithoutTitle(list, regName)
-  list.sort(function (a, b) { return (a.N+"").toLowerCase() > (b.N+"").toLowerCase() });
+  list.sort(function (a, b) { 
+    var nameA = (a.N+"").toUpperCase(); // ignore upper and lowercase
+    var nameB = (b.N+"").toUpperCase(); // ignore upper and lowercase
+    if (nameA < nameB) {
+      return -1;
+    }
+    if (nameA > nameB) {
+      return 1;
+    }
+
+    // names must be equal
+    return 0;
+    
+    });
 
 
   //event.sender.send("list:obtained", "aa");
@@ -192,6 +205,8 @@ ipcMain.on('persons:get', async (event, a) => {
   }
 
   arr2.push({ N: n, R: rn})
+  
+
   arr = arr2
   ws = wb.sheet(regSheet)
   if (typeof (ws) != "undefined") {
@@ -381,7 +396,17 @@ const menuTemplate = [
         }
       }
     ]
-  }
+  }, {
+    label: "Edit",
+    submenu: [
+        { label: "Undo", accelerator: "CmdOrCtrl+Z", selector: "undo:" },
+        { label: "Redo", accelerator: "Shift+CmdOrCtrl+Z", selector: "redo:" },
+        { type: "separator" },
+        { label: "Cut", accelerator: "CmdOrCtrl+X", selector: "cut:" },
+        { label: "Copy", accelerator: "CmdOrCtrl+C", selector: "copy:" },
+        { label: "Paste", accelerator: "CmdOrCtrl+V", selector: "paste:" },
+        { label: "Select All", accelerator: "CmdOrCtrl+A", selector: "selectAll:" }
+    ]}
 ];
 
 

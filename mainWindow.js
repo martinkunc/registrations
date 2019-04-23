@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { ipcRenderer } = electron;
 
+
 let input;
 
 ipcRenderer.on('screen:set', (event, screen) => {
