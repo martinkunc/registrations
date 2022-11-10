@@ -14,7 +14,7 @@
   "devDependencies": {
     "alertifyjs": "^1.13.1",
     "awesomplete": "^1.1.5",
-    "electron": "^15.5.5",
+    "electron": "^18.3.7",
     "electron-packager": "^16.0.0"
   }
 }
